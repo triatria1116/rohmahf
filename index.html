@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Getuk Runner (Pembeli, Awan & Burung)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      let posX, posY, groundY;
+      let jumpY = 0,
+        gravity = 0.65,
+        jumpPower = -28;
+      let isJumping = false,
+        jumpCount = 0,
+        maxJumps = 2,
+        stepFrame = 0;
+      let obstacleX,
+        obstacleY,
+        obstacleSpeed = 4,
+        obstacleType = "dog";
+      let houseX = new Array(7);
+      let score = 0,
+        lives = 3,
+        gameOver = false;
+      let finishX = -1,
+        gameWin = false,
+        targetScore = 10;
+      let buyers = [];
+      let clouds = [];
+      let birds = [];
+
+      // Variabel untuk layar start
+      let gameStarted = false;
+      let startScreenAlpha = 255;
+
+      function setup() {
+        createCanvas(windowWidth, windowHeight);
+        posX = 150;
+        groundY = height - 130;
+        posY = groundY;
+        obstacleX = width + 100;
+        obstacleY = groundY;
+
+        textFont("Arial", 16);
+        for (let i = 0; i < houseX.length; i++) {
+          houseX[i] = 200 + i * 300;
+          buyers.push({
+            x: houseX[i] + 20,
+            y: groundY - 10,
+            active: random(1) < 0.4,
+          });
+        }
+
+        for (let i = 0; i < 5; i++) {
+          clouds.push({
+            x: random(width),
+            y: random(30, 150),
+            speed: random(0.5, 1.5),
+          });
+        }
+
+        for (let i = 0; i < 3; i++) {
+          birds.push({
+            x: random(width),
+            y: random(50, 200),
+            speed: random(2, 4),
+          });
+        }
+      }
+
+      function draw() {
+        background(180, 230, 255);
+        drawClouds();
+        drawBirds();
+        drawGround();
+        drawSun();
+        drawMovingHouses();
+
+        // Tampilkan layar start jika game belum dimulai
+        if (!gameStarted) {
+          drawStartScreen();
+          return;
+        }
+
+        if (frameCount < 300 && !gameOver && !gameWin) {
+          fill(0);
+          textAlign(CENTER);
+          text(
+            "Spasi: Lompat (2x) | R: Ulang | Bertemu pembeli untuk nyawa!",
+            width / 2,
+            30
+          );
+        }
+
+        if (!gameOver && !gameWin) {
+          stepFrame++;
+          drawRunner(posX, posY + jumpY);
+          applyGravity();
+
+          drawObstacle(obstacleX, obstacleY);
+          moveObstacle();
+          checkCollision();
+
+          for (let buyer of buyers) {
+            if (
+              buyer.active &&
+              dist(posX, posY + jumpY, buyer.x, buyer.y) < 40
+            ) {
+              lives++;
+              buyer.active = false;
+            }
+          }
+
+          if (!gameWin && score >= targetScore && finishX < 0)
+            finishX = width + 200;
+          if (finishX > 0) {
+            drawFinishLine(finishX);
+            finishX -= obstacleSpeed;
+            if (dist(posX, posY + jumpY, finishX, groundY) < 50) gameWin = true;
+          }
+
+          drawHUD();
+        }
+
+        if (gameOver) drawGameOverScreen();
+        if (gameWin) drawWinScreen();
+      }
+
+      function drawStartScreen() {
+        background(180, 230, 255);
+        drawClouds();
+        drawBirds();
+        drawGround();
+        drawSun();
+
+        // Judul game
+        fill(0);
+        textAlign(CENTER);
+        textSize(48);
+        text("GETUK RUNNER", width / 2, 100);
+
+        // Kotak tombol start
+        let buttonWidth = 200;
+        let buttonHeight = 60;
+        let buttonX = width / 2 - buttonWidth / 2;
+        let buttonY = 150;
+
+        // Efek hover/berkedip pada kotak
+        let blinkAlpha = map(sin(frameCount * 0.1), -1, 1, 200, 255);
+
+        // Shadow kotak
+        fill(0, 50);
+        rect(buttonX + 5, buttonY + 5, buttonWidth, buttonHeight, 10);
+
+        // Kotak utama
+        fill(50, 150, 50, blinkAlpha);
+        stroke(0);
+        strokeWeight(3);
+        rect(buttonX, buttonY, buttonWidth, buttonHeight, 10);
+        noStroke();
+
+        // Teks START di dalam kotak
+        fill(255);
+        textSize(32);
+        text("START", width / 2, buttonY + 40);
+      }
+
+      function drawMiniRunner(x, y) {
+        push();
+        translate(x, y);
+        scale(0.8);
+
+        // Bayangan
+        fill(0, 50);
+        ellipse(0, 55, 40, 10);
+
+        // Kepala (profil menghadap kanan)
+        fill(255, 220, 180);
+        ellipse(5, -70, 45, 50);
+
+        // Mata (satu mata terlihat dari samping)
+        fill(0);
+        ellipse(15, -75, 6, 6);
+
+        // Hidung (profil)
+        fill(255, 200, 160);
+        triangle(25, -70, 30, -65, 25, -60);
+
+        // Mulut (senyum dari samping)
+        noFill();
+        stroke(0);
+        strokeWeight(1);
+        arc(20, -60, 15, 8, 0, PI / 2);
+        noStroke();
+
+        // Topi (dari samping)
+        fill(200, 0, 0);
+        arc(5, -80, 50, 30, PI, TWO_PI);
+
+        // Badan
+        fill(50, 100, 200);
+        rect(-15, -45, 30, 40, 6);
+
+        // Tangan kiri (belakang)
+        stroke(0);
+        strokeWeight(3);
+        line(-15, -30, -35, 0);
+
+        // Tangan kanan (depan)
+        line(15, -30, 35, -5);
+        noStroke();
+
+        // Pikulan
+        stroke(139, 69, 19);
+        strokeWeight(5);
+        line(-50, -50, 50, -50);
+        noStroke();
+
+        // Tali penghubung
+        stroke(101, 67, 33);
+        strokeWeight(3);
+
+        // Tali kiri
+        line(-50, -50, -55, -35);
+        line(-55, -35, -55, -20);
+        line(-55, -20, -55, -10);
+
+        // Tali kanan
+        line(50, -50, 55, -35);
+        line(55, -35, 55, -20);
+        line(55, -20, 55, -10);
+
+        // Pengikat tali
+        fill(101, 67, 33);
+        ellipse(-50, -50, 6, 6);
+        ellipse(50, -50, 6, 6);
+
+        noStroke();
+
+        // Keranjang kiri
+        fill(240, 180, 80);
+        rect(-70, -10, 30, 30, 5);
+        stroke(200, 150, 60);
+        strokeWeight(2);
+        noFill();
+        rect(-70, -10, 30, 30, 5);
+        noStroke();
+
+        fill(255);
+        textSize(12);
+        text("Getuk", -68, 10);
+
+        // Keranjang kanan
+        fill(240, 180, 80);
+        rect(40, -10, 30, 30, 5);
+        stroke(200, 150, 60);
+        strokeWeight(2);
+        noFill();
+        rect(40, -10, 30, 30, 5);
+        noStroke();
+
+        fill(255);
+        text("Getuk", 42, 10);
+
+        // Kaki (dari samping)
+        stroke(0);
+        strokeWeight(3);
+        line(-5, -5, -5, 25);
+        line(5, -5, 12, 25);
+        noStroke();
+
+        pop();
+      }
+
+      function drawClouds() {
+        fill(255);
+        noStroke();
+        for (let c of clouds) {
+          ellipse(c.x, c.y, 60, 40);
+          ellipse(c.x + 30, c.y + 10, 50, 30);
+          ellipse(c.x - 30, c.y + 10, 50, 30);
+          if (gameStarted) {
+            c.x -= c.speed;
+            if (c.x < -60) {
+              c.x = width + random(100);
+              c.y = random(30, 150);
+              c.speed = random(0.5, 1.5);
+            }
+          }
+        }
+      }
+
+      function drawBirds() {
+        for (let b of birds) {
+          fill(255, 255, 0);
+          triangle(b.x, b.y, b.x - 10, b.y + 5, b.x - 10, b.y - 5);
+          fill(0);
+          ellipse(b.x - 12, b.y, 10, 5);
+          if (gameStarted) {
+            b.x -= b.speed;
+            if (b.x < -20) {
+              b.x = width + random(100);
+              b.y = random(50, 200);
+              b.speed = random(2, 4);
+            }
+          }
+        }
+      }
+
+      function windowResized() {
+        resizeCanvas(windowWidth, windowHeight);
+        groundY = height - 130;
+        posY = groundY;
+        obstacleY = groundY;
+      }
+
+      function keyPressed() {
+        // Start game dengan spasi
+        if (!gameStarted && key === " ") {
+          gameStarted = true;
+          return false;
+        }
+
+        if (
+          key === " " &&
+          jumpCount < maxJumps &&
+          !gameOver &&
+          !gameWin &&
+          gameStarted
+        ) {
+          jumpY = jumpPower;
+          isJumping = true;
+          jumpCount++;
+          return false;
+        }
+        if ((key === "r" || key === "R") && (gameOver || gameWin))
+          restartGame();
+      }
+
+      function applyGravity() {
+        if (isJumping) {
+          jumpY += gravity;
+          if (posY + jumpY >= groundY) {
+            jumpY = 0;
+            isJumping = false;
+            jumpCount = 0;
+          }
+        }
+      }
+
+      function moveObstacle() {
+        obstacleX -= obstacleSpeed;
+        if (obstacleX < -40) {
+          obstacleX = width + random(300, 600);
+          obstacleType = random(1) < 0.5 ? "dog" : "thief";
+          score++;
+        }
+      }
+
+      function checkCollision() {
+        if (dist(posX, posY + jumpY, obstacleX + 20, obstacleY + 20) < 35) {
+          lives--;
+          obstacleX = width + 300;
+          if (lives <= 0) gameOver = true;
+        }
+      }
+
+      function restartGame() {
+        score = 0;
+        lives = 3;
+        gameOver = false;
+        gameWin = false;
+        gameStarted = false; // Reset ke layar start
+        finishX = -1;
+        obstacleX = width + 100;
+        jumpY = 0;
+        isJumping = false;
+        jumpCount = 0;
+        for (let i = 0; i < houseX.length; i++) {
+          houseX[i] = 200 + i * 300;
+          buyers[i].x = houseX[i] + 20;
+          buyers[i].active = random(1) < 0.4;
+        }
+      }
+
+      function drawGround() {
+        fill(100, 200, 100);
+        rect(0, groundY + 60, width, height - groundY);
+      }
+
+      function drawSun() {
+        fill(255, 255, 0);
+        ellipse(60, 60, 50, 50);
+      }
+
+      function drawMovingHouses() {
+        for (let i = 0; i < houseX.length; i++) {
+          drawTree(houseX[i] - 60, groundY - 140);
+          drawHouse(houseX[i], groundY - 80);
+          if (gameStarted) {
+            houseX[i] -= obstacleSpeed / 2;
+            if (houseX[i] < -100) {
+              houseX[i] = width + random(300, 400);
+              buyers[i].x = houseX[i] + 20;
+              buyers[i].active = random(1) < 0.4;
+            }
+          }
+          drawBuyerAtHouse(buyers[i]);
+        }
+      }
+
+      function drawHouse(x, y) {
+        fill(230, 180, 120);
+        rect(x, y, 80, 80);
+        fill(150, 75, 0);
+        triangle(x - 10, y, x + 40, y - 50, x + 90, y);
+        fill(100, 50, 0);
+        rect(x + 30, y + 40, 20, 40);
+        drawGrass(x + 10, y + 80);
+        drawGrass(x + 50, y + 80);
+      }
+
+      function drawTree(x, y) {
+        fill(101, 67, 33);
+        rect(x + 20, y + 60, 20, 80);
+        fill(34, 139, 34);
+        ellipse(x + 30, y + 50, 80, 80);
+        ellipse(x + 10, y + 40, 70, 70);
+        ellipse(x + 50, y + 40, 70, 70);
+        ellipse(x + 30, y + 30, 60, 60);
+      }
+
+      function drawGrass(x, y) {
+        stroke(34, 139, 34);
+        strokeWeight(2);
+        for (let i = 0; i < 5; i++) {
+          line(x + i * 3, y, x + i * 3, y - 8 - random(3));
+        }
+        noStroke();
+      }
+
+      function drawBuyerAtHouse(buyer) {
+        if (!buyer.active) return;
+        fill(255, 230, 180);
+        ellipse(buyer.x, buyer.y - 25, 25, 25);
+        fill(0, 120, 255);
+        rect(buyer.x - 10, buyer.y - 10, 20, 25, 5);
+        fill(255);
+        arc(buyer.x, buyer.y - 15, 10, 5, 0, PI);
+      }
+
+      function drawRunner(x, y) {
+        // Bayangan
+        fill(0, 50);
+        ellipse(x, y + 55, 40, 10);
+
+        // Kepala (profil menghadap kanan)
+        fill(255, 220, 180);
+        ellipse(x + 5, y - 70, 45, 50);
+
+        // Mata (satu mata terlihat dari samping)
+        fill(0);
+        ellipse(x + 15, y - 75, 6, 6);
+
+        // Hidung (profil)
+        fill(255, 200, 160);
+        triangle(x + 25, y - 70, x + 30, y - 65, x + 25, y - 60);
+
+        // Mulut (senyum dari samping)
+        noFill();
+        stroke(0);
+        strokeWeight(1);
+        arc(x + 20, y - 60, 15, 8, 0, PI / 2);
+        noStroke();
+
+        // Topi (dari samping)
+        fill(200, 0, 0);
+        arc(x + 5, y - 80, 50, 30, PI, TWO_PI);
+
+        // Badan
+        fill(50, 100, 200);
+        rect(x - 15, y - 45, 30, 40, 6);
+
+        // Tangan kiri (belakang, lebih samar)
+        stroke(0);
+        strokeWeight(2);
+        line(x - 15, y - 30, x - 35, y);
+
+        // Tangan kanan (depan, lebih jelas)
+        strokeWeight(3);
+        line(x + 15, y - 30, x + 35, y - 5);
+        noStroke();
+
+        // Pikulan
+        stroke(139, 69, 19);
+        strokeWeight(5);
+        line(x - 50, y - 50, x + 50, y - 50);
+        noStroke();
+
+        // Tali penghubung dengan efek ayunan
+        let ropeSwing = isJumping
+          ? sin(frameCount * 0.3) * 2
+          : sin(frameCount * 0.1) * 1;
+
+        stroke(101, 67, 33);
+        strokeWeight(3);
+
+        // Tali kiri
+        line(x - 50, y - 50, x - 55 + ropeSwing, y - 35);
+        line(x - 55 + ropeSwing, y - 35, x - 55 + ropeSwing, y - 20);
+        line(x - 55 + ropeSwing, y - 20, x - 55, y - 10);
+
+        // Tali kanan
+        line(x + 50, y - 50, x + 55 - ropeSwing, y - 35);
+        line(x + 55 - ropeSwing, y - 35, x + 55 - ropeSwing, y - 20);
+        line(x + 55 - ropeSwing, y - 20, x + 55, y - 10);
+
+        // Pengikat tali
+        fill(101, 67, 33);
+        ellipse(x - 50, y - 50, 6, 6);
+        ellipse(x + 50, y - 50, 6, 6);
+
+        // Tali horizontal stabilizer
+        strokeWeight(2);
+        line(x - 55, y - 25, x + 55, y - 25);
+
+        noStroke();
+
+        // Keranjang kiri (belakang)
+        fill(240, 180, 80);
+        rect(x - 70, y - 10, 30, 30, 5);
+        stroke(200, 150, 60);
+        strokeWeight(2);
+        noFill();
+        rect(x - 70, y - 10, 30, 30, 5);
+        noStroke();
+
+        fill(255);
+        textSize(12);
+        text("Getuk", x - 68, y + 10);
+
+        // Keranjang kanan (depan)
+        fill(240, 180, 80);
+        rect(x + 40, y - 10, 30, 30, 5);
+        stroke(200, 150, 60);
+        strokeWeight(2);
+        noFill();
+        rect(x + 40, y - 10, 30, 30, 5);
+        noStroke();
+
+        fill(255);
+        text("Getuk", x + 42, y + 10);
+
+        // Kaki (posisi berjalan dari samping)
+        stroke(0);
+        strokeWeight(3);
+        let kakiOffset = isJumping ? 10 : 0;
+        let gerakKaki = sin(radians(stepFrame * 10)) * 8;
+
+        // Kaki kiri (belakang)
+        line(x - 5, y - 5, x - 5 + gerakKaki, y + 25 + kakiOffset);
+
+        // Kaki kanan (depan)
+        line(x + 5, y - 5, x + 12 - gerakKaki, y + 25 + kakiOffset);
+
+        noStroke();
+      }
+
+      function drawObstacle(x, y) {
+        if (obstacleType === "dog") {
+          fill(139, 69, 19);
+          ellipse(x + 20, y + 20, 40, 25);
+          ellipse(x + 10, y + 10, 20, 20);
+        } else {
+          fill(0);
+          rect(x + 10, y + 10, 20, 30);
+          fill(50);
+          ellipse(x + 20, y, 25, 25);
+        }
+      }
+
+      function drawHUD() {
+        fill(0);
+        textAlign(LEFT);
+        text("Skor: " + score, 10, 20);
+        text("Nyawa: " + lives, 10, 40);
+      }
+
+      function drawFinishLine(x) {
+        stroke(255, 0, 0);
+        strokeWeight(4);
+        line(x, groundY - 80, x, groundY + 60);
+        noStroke();
+        fill(255);
+        textSize(20);
+        text("FINISH", x - 25, groundY - 90);
+        textSize(16);
+      }
+
+      function drawGameOverScreen() {
+        fill(0);
+        textSize(32);
+        textAlign(CENTER);
+        text("Game Over!", width / 2, height / 2);
+        textSize(16);
+        text("Tekan 'R' untuk mulai ulang", width / 2, height / 2 + 30);
+        drawHUD();
+      }
+
+      function drawWinScreen() {
+        fill(0, 150, 0);
+        textSize(32);
+        textAlign(CENTER);
+        text("🎉 Kamu Menang!", width / 2, height / 2);
+        textSize(16);
+        text("Tekan 'R' untuk bermain lagi", width / 2, height / 2 + 30);
+        drawHUD();
+      }
+    </script>
+  </body>
+</html>
